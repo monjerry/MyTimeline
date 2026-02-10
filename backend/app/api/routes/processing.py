@@ -219,3 +219,26 @@ async def process_all(
         "status": "success",
         "results": results
     }
+
+
+@router.delete("/clear-all")
+async def clear_all_images(db: AsyncSession = Depends(get_db)):
+    """Delete all images and related data from the database."""
+    from sqlalchemy import delete
+    from app.models import Tag, AIAnalysis, ExifData, Image
+
+    try:
+        # Delete in order due to foreign key constraints
+        await db.execute(delete(Tag))
+        await db.execute(delete(AIAnalysis))
+        await db.execute(delete(ExifData))
+        await db.execute(delete(Image))
+        await db.commit()
+
+        return {
+            "status": "success",
+            "message": "All images and data cleared successfully"
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")

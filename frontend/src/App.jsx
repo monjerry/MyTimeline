@@ -64,6 +64,26 @@ function App() {
     }
   };
 
+  const handleClearAll = async () => {
+    const confirmed = window.confirm(
+      '⚠️ Are you sure you want to delete ALL images from the database?\n\nThis will remove all scanned images, EXIF data, AI analysis, and tags. This action cannot be undone!'
+    );
+
+    if (!confirmed) return;
+
+    setProcessing(true);
+    try {
+      await processingAPI.clearAll();
+      alert('All images cleared successfully!');
+      window.location.reload();
+    } catch (err) {
+      console.error('Error clearing images:', err);
+      alert('Error clearing images: ' + err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -110,6 +130,14 @@ function App() {
             className="scan-button"
           >
             {processing ? 'Processing...' : 'Scan & Process'}
+          </button>
+          <button
+            onClick={handleClearAll}
+            disabled={processing}
+            className="clear-button"
+            title="Delete all images from database"
+          >
+            🗑️ Clear All
           </button>
         </div>
 

@@ -44,6 +44,7 @@ export const processingAPI = {
     apiClient.post('/analyze', { image_ids: imageIds, force }),
   processAll: (folderPath = null) =>
     apiClient.post('/process-all', null, { params: { folder_path: folderPath } }),
+  clearAll: () => apiClient.delete('/clear-all'),
 };
 
 export default apiClient;

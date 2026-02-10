@@ -55,7 +55,7 @@ async def get_timeline(
 
         timeline_items.append({
             "id": image.id,
-            "content": f'<img src="/api/images/{image.id}/thumbnail?size=150" alt="{image.file_name}" />',
+            "content": f'<img src="http://localhost:8000/api/images/{image.id}/thumbnail?size=150" alt="{image.file_name}" style="max-width: 150px; max-height: 150px; border-radius: 4px;" />',
             "start": item_date.isoformat() if item_date else None,
             "title": analysis.description[:100] if analysis and analysis.description else image.file_name,
             "className": "timeline-item",
