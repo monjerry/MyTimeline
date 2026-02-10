@@ -44,6 +44,11 @@ export const processingAPI = {
     apiClient.post('/analyze', { image_ids: imageIds, force }),
   processAll: (folderPath = null) =>
     apiClient.post('/process-all', null, { params: { folder_path: folderPath } }),
+  uploadAndProcess: (formData) =>
+    apiClient.post('/upload-and-process', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 minutes timeout for large uploads
+    }),
   clearAll: () => apiClient.delete('/clear-all'),
 };
 

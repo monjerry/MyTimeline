@@ -4,7 +4,9 @@ An interactive image timeline application with AI-powered analysis using LLaVA. 
 
 ## Features
 
-- 📸 **Image Scanning** - Recursively scan folders for images
+- 📁 **Folder Picker** - Browse and select folders with native OS picker (Chrome/Edge/Opera)
+- 📤 **File Upload** - Automatically uploads and processes images from selected folder
+- 📸 **Recursive Scanning** - Scans all subdirectories for images
 - 📊 **EXIF Extraction** - Extract camera settings, GPS coordinates, dates, and more
 - 🤖 **AI Analysis** - Analyze images with LLaVA (vision language model) via Ollama
 - 📅 **Interactive Timeline** - Beautiful timeline visualization with Vis.js
@@ -34,11 +36,12 @@ An interactive image timeline application with AI-powered analysis using LLaVA. 
 
 1. **Python 3.10+** - [Download](https://www.python.org/downloads/)
 2. **Node.js 18+** - [Download](https://nodejs.org/)
-3. **uv** - Fast Python package manager
+3. **Modern Browser** - Chrome, Edge, or Opera (for File System Access API)
+4. **uv** - Fast Python package manager
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
-4. **Ollama** - For LLaVA model
+5. **Ollama** - For LLaVA model
    - Install: [https://ollama.ai/download](https://ollama.ai/download)
    - Pull model: `ollama pull llama3.2-vision` or `ollama pull llava`
 
@@ -62,11 +65,16 @@ uv run python scripts/setup_db.py
 
 ### 2. Configure Environment
 
-Edit `backend/.env` file with your settings:
+Edit `backend/.env` file if you want to customize settings:
 ```bash
-IMAGE_FOLDER=/Users/yourusername/Pictures
+# Optional: only needed if using the legacy /scan API endpoint
+# IMAGE_FOLDER=/Users/yourusername/Pictures
+
+# AI Model (default: llama3.2-vision)
 OLLAMA_MODEL=llama3.2-vision
 ```
+
+**Note:** The `IMAGE_FOLDER` setting is optional since the app now uses a folder picker to upload files directly.
 
 ### 3. Setup Frontend
 
@@ -103,16 +111,25 @@ The frontend will be available at: **http://localhost:5173**
 
 ## Usage
 
-### 1. Scan Images
+### 1. Browse & Process Images
 
-1. Enter a folder path in the input field (e.g., `/Users/username/Pictures`)
-2. Click **"Scan & Process"**
+1. Click **"📁 Browse & Process Folder"**
+2. Select your photos folder using the native file picker
+3. Review the count of images found
+4. Click **"OK"** to confirm and start processing
 
 This will:
-- Scan the folder for images (recursive)
+- Upload all images from the selected folder (including subdirectories)
 - Extract EXIF metadata (date, camera, GPS)
 - Analyze images with LLaVA AI
 - Generate searchable tags
+- Display results on the timeline
+
+**Browser Compatibility:**
+- ✅ **Supported:** Chrome, Edge, Opera
+- ❌ **Not Supported:** Firefox, Safari (File System Access API not available)
+
+**Note:** Images are stored in `backend/data/uploads/` and remain accessible after processing.
 
 ### 2. View Timeline
 
@@ -165,7 +182,14 @@ Click the **"🗑️ Clear All"** button to remove all data:
 - `GET /api/locations` - Get unique GPS locations
 
 ### Processing
-- `POST /api/scan` - Scan folder for images
+- `POST /api/upload-and-process` - Upload and process images (primary method)
+  - **Content-Type:** `multipart/form-data`
+  - **Form fields:**
+    - `files`: List of image files
+    - `folder_name`: Name of the source folder
+    - `relative_paths`: List of relative paths for each file
+  - **Returns:** Processing results with counts
+- `POST /api/scan` - Scan local folder for images (legacy)
   ```json
   {"folder_path": "/path/to/images", "recursive": true}
   ```
@@ -201,7 +225,8 @@ timelineai/
 │   │       └── database.py        # DB session management
 │   ├── data/
 │   │   ├── images.db              # SQLite database
-│   │   └── cache/                 # Thumbnail cache
+│   │   ├── cache/                 # Thumbnail cache
+│   │   └── uploads/               # Uploaded images storage
 │   ├── scripts/
 │   │   └── setup_db.py            # Database initialization
 │   ├── main.py                    # FastAPI entry point
@@ -228,7 +253,7 @@ timelineai/
 Located at `backend/.env`:
 
 ```bash
-# Image source folder
+# Image source folder (optional - only for legacy /scan endpoint)
 IMAGE_FOLDER=/path/to/images
 
 # Database
@@ -270,8 +295,11 @@ VITE_API_URL=http://localhost:8000
 - **View:** Thumbnails display directly on timeline items
 
 ### Action Buttons
-- **Scan & Process:** Scan folder, extract EXIF, analyze with AI
-- **Clear All:** Remove all data from database (with confirmation)
+- **📁 Browse & Process Folder:** Opens native folder picker, uploads images, and processes them automatically
+  - Works in Chrome, Edge, and Opera
+  - Recursively scans all subdirectories
+  - Shows confirmation with image count before processing
+- **🗑️ Clear All:** Remove all data from database (with confirmation)
 
 ### Statistics Dashboard
 Real-time counts displayed at the top:
@@ -379,10 +407,17 @@ Frontend (port 5173):
 lsof -ti:5173 | xargs kill -9
 ```
 
+### Folder Picker Not Working
+
+If you see "Folder picker is not supported in your browser":
+- **Solution:** Use Chrome, Edge, or Opera (Firefox and Safari don't support File System Access API)
+- **Alternative:** Use the legacy `/scan` API endpoint with a direct path
+
 ### Image Loading Issues
-- Check file permissions on image folder
-- Ensure IMAGE_FOLDER path is correct
+- Ensure images were uploaded successfully
+- Check `backend/data/uploads/` directory exists
 - Verify supported formats: JPG, PNG, HEIC, TIFF, WebP
+- Check browser console for CORS or network errors
 
 ## Supported Image Formats
 

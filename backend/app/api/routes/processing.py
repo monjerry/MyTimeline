@@ -1,10 +1,12 @@
 """API routes for image processing operations (scan, analyze)."""
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from pathlib import Path
 from typing import List, Optional
+import shutil
+import tempfile
 
 from app.models import Image
 from app.utils.database import get_db
@@ -219,6 +221,97 @@ async def process_all(
         "status": "success",
         "results": results
     }
+
+
+@router.post("/upload-and-process")
+async def upload_and_process(
+    files: List[UploadFile] = File(...),
+    folder_name: str = Form(...),
+    relative_paths: List[str] = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Upload images and process them (save, extract EXIF, analyze with AI)."""
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    # Create a permanent directory to store uploaded files
+    upload_base_dir = Path("./data/uploads")
+    upload_base_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use timestamp to avoid conflicts
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    upload_dir = upload_base_dir / f"{folder_name}_{timestamp}"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        saved_files = []
+
+        # Save uploaded files to permanent directory
+        for file, rel_path in zip(files, relative_paths):
+            # Create subdirectories if needed
+            file_path = upload_dir / rel_path
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Save file
+            with file_path.open("wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+
+            saved_files.append(file_path)
+
+        # Scan the upload folder
+        scan_results = await scan_folder(db, upload_dir, recursive=True)
+
+        # Extract EXIF for newly added images
+        query = (
+            select(Image)
+            .outerjoin(Image.exif_data)
+            .where(Image.exif_data == None)
+        )
+        result = await db.execute(query)
+        images_for_exif = result.scalars().all()
+
+        exif_success = 0
+        for image in images_for_exif:
+            try:
+                await extract_exif(db, image.id)
+                exif_success += 1
+            except Exception as e:
+                print(f"EXIF extraction error for {image.file_name}: {e}")
+
+        # Analyze images with AI
+        query = (
+            select(Image)
+            .outerjoin(Image.ai_analysis)
+            .where(Image.ai_analysis == None)
+        )
+        result = await db.execute(query)
+        images_for_analysis = result.scalars().all()
+
+        analysis_success = 0
+        for image in images_for_analysis:
+            try:
+                await analyze_image(db, image.id)
+                analysis_success += 1
+            except Exception as e:
+                print(f"AI analysis error for {image.file_name}: {e}")
+
+        return {
+            "status": "success",
+            "scanned": scan_results.get('new', 0),
+            "processed": exif_success,
+            "analyzed": analysis_success,
+            "upload_path": str(upload_dir),
+            "message": f"Successfully processed {scan_results.get('new', 0)} images"
+        }
+
+    except Exception as e:
+        # Clean up on error
+        try:
+            shutil.rmtree(upload_dir)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error processing uploaded files: {str(e)}")
 
 
 @router.delete("/clear-all")

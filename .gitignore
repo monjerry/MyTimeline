@@ -47,8 +47,9 @@ ENV/
 *.sqlite3
 
 # Cache
-data/cache/
-data/embeddings/
+backend/data/cache/
+backend/data/embeddings/
+backend/data/uploads/
 *.cache
 
 # Testing

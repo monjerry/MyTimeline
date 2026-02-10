@@ -35,29 +35,88 @@ function App() {
     setSelectedImage(null);
   };
 
-  const handleScanFolder = async () => {
-    if (!folderPath.trim()) {
-      alert('Please enter a folder path');
-      return;
-    }
-
-    setProcessing(true);
+  const handleBrowseFolder = async () => {
     try {
-      const scanResponse = await processingAPI.scan(folderPath, true);
-      console.log('Scan results:', scanResponse.data);
+      // Check if File System Access API is supported
+      if (!('showDirectoryPicker' in window)) {
+        alert('Folder picker is not supported in your browser. Please use Chrome, Edge, or Opera.');
+        return;
+      }
 
-      // Extract EXIF
-      const exifResponse = await processingAPI.extractExif();
-      console.log('EXIF extraction:', exifResponse.data);
+      setProcessing(true);
+      const dirHandle = await window.showDirectoryPicker();
+      setFolderPath(dirHandle.name);
 
-      // Analyze images
-      const analyzeResponse = await processingAPI.analyze();
-      console.log('Analysis results:', analyzeResponse.data);
+      // Read all image files from the directory
+      const imageFiles = [];
+      const supportedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.heic', '.heif', '.webp'];
 
-      alert('Processing complete! Refresh to see results.');
+      async function scanDirectory(directoryHandle, path = '') {
+        for await (const entry of directoryHandle.values()) {
+          if (entry.kind === 'file') {
+            const fileName = entry.name.toLowerCase();
+            if (supportedExtensions.some(ext => fileName.endsWith(ext))) {
+              const file = await entry.getFile();
+              imageFiles.push({
+                file,
+                relativePath: path ? `${path}/${entry.name}` : entry.name
+              });
+            }
+          } else if (entry.kind === 'directory') {
+            // Recursively scan subdirectories
+            await scanDirectory(entry, path ? `${path}/${entry.name}` : entry.name);
+          }
+        }
+      }
+
+      await scanDirectory(dirHandle);
+
+      if (imageFiles.length === 0) {
+        alert('No image files found in the selected folder.');
+        setProcessing(false);
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Found ${imageFiles.length} image(s) in "${dirHandle.name}".\n\nProceed with processing?`
+      );
+
+      if (!confirmed) {
+        setProcessing(false);
+        return;
+      }
+
+      // Process the images
+      await processImageFiles(imageFiles, dirHandle.name);
+
+    } catch (err) {
+      // User cancelled or error occurred
+      if (err.name !== 'AbortError') {
+        console.error('Error selecting folder:', err);
+        alert('Error accessing folder: ' + err.message);
+      }
+      setProcessing(false);
+    }
+  };
+
+  const processImageFiles = async (imageFiles, folderName) => {
+    try {
+      // Upload and process each file
+      const formData = new FormData();
+      formData.append('folder_name', folderName);
+
+      imageFiles.forEach((item) => {
+        formData.append('files', item.file);
+        formData.append('relative_paths', item.relativePath);
+      });
+
+      const response = await processingAPI.uploadAndProcess(formData);
+      console.log('Processing complete:', response.data);
+
+      alert(`Processing complete!\n\nScanned: ${response.data.scanned || imageFiles.length} images\nProcessed: ${response.data.processed || 0}`);
       window.location.reload();
     } catch (err) {
-      console.error('Error processing:', err);
+      console.error('Error processing images:', err);
       alert('Error processing images: ' + err.message);
     } finally {
       setProcessing(false);
@@ -116,20 +175,18 @@ function App() {
 
         {/* Scan Control */}
         <div className="scan-control">
-          <input
-            type="text"
-            placeholder="Enter folder path (e.g., /Users/username/Pictures)"
-            value={folderPath}
-            onChange={(e) => setFolderPath(e.target.value)}
-            className="folder-input"
-            disabled={processing}
-          />
+          {folderPath && (
+            <div className="selected-folder">
+              📁 Selected: <strong>{folderPath}</strong>
+            </div>
+          )}
           <button
-            onClick={handleScanFolder}
-            disabled={processing || !folderPath.trim()}
-            className="scan-button"
+            onClick={handleBrowseFolder}
+            disabled={processing}
+            className="browse-button-large"
+            title="Browse and process folder"
           >
-            {processing ? 'Processing...' : 'Scan & Process'}
+            {processing ? '⏳ Processing...' : '📁 Browse & Process Folder'}
           </button>
           <button
             onClick={handleClearAll}
